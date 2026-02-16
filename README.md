@@ -64,11 +64,12 @@ Edit `.env` and fill in:
 ### 7. Install and Run
 
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-python bot.py
+uv run bot.py
 ```
+
+This will automatically create a virtual environment, install dependencies, and start the bot.
+
+> **Note:** If you don't have `uv` installed, see [uv installation docs](https://docs.astral.sh/uv/getting-started/installation/).
 
 ## Usage
 
@@ -84,7 +85,7 @@ python bot.py
 cadoopet-bot/
 ├── bot.py                          # Main entry point
 ├── config.py                       # Environment configuration
-├── requirements.txt                # Python dependencies
+├── pyproject.toml                  # Python dependencies (uv)
 ├── .env.example                    # Environment template
 ├── handlers/
 │   └── invoice_handler.py          # Telegram conversation flow
