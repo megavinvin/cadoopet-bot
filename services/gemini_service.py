@@ -11,7 +11,7 @@ EXTRACTION_PROMPT = """You are an invoice data extraction assistant. Analyze thi
 Return ONLY a valid JSON object with these exact keys:
 {
   "month": "the month of the invoice (e.g. January 2025)",
-  "invoice_date": "the invoice date in DD/MM/YYYY format",
+  "invoice_date": "the invoice date in DD-Mon-YYYY format (e.g. 18-Feb-2026)",
   "transaction_type": "type of transaction (e.g. Purchase, Service, Rental, Utility, etc.)",
   "category": "category of the transaction (e.g. Office Supplies, Food & Beverage, Transportation, Utilities, IT Equipment, Marketing, Maintenance, etc.)",
   "supplier": "supplier/vendor name",

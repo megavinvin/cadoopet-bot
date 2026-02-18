@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 
@@ -114,7 +115,7 @@ async def receive_claim_by(update: Update, context: ContextTypes.DEFAULT_TYPE):
     file_path = context.user_data["file_path"]
 
     try:
-        extracted = extract_invoice_data(file_path)
+        extracted = await asyncio.to_thread(extract_invoice_data, file_path)
     except Exception as e:
         logger.error(f"Gemini extraction error: {e}")
         await update.message.reply_text(
@@ -161,59 +162,101 @@ async def receive_claim_by(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_approval(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle approve/reject callback."""
     query = update.callback_query
-    await query.answer()
+
+    if query is None:
+        return ConversationHandler.END
+
+    try:
+        # Always acknowledge callback quickly to stop Telegram loading UI.
+        await query.answer()
+    except Exception as e:
+        logger.warning(f"Failed to answer callback query: {e}")
+
+    logger.info(
+        "Approval callback received: data=%s user_id=%s has_session=%s",
+        query.data,
+        update.effective_user.id if update.effective_user else "unknown",
+        bool(context.user_data),
+    )
 
     if query.data == "approve":
-        await query.edit_message_text("Approved! Saving to Google Sheet and uploading to Drive...")
-
-        invoice_data = context.user_data["invoice_data"]
-        file_path = context.user_data["file_path"]
-        file_name = context.user_data["file_name"]
-
-        errors = []
-
-        # 1. Append to Google Sheet
-        try:
-            row_num = append_invoice_row(invoice_data)
-            sheet_msg = f"Google Sheet: Row {row_num} added."
-        except Exception as e:
-            logger.error(f"Google Sheets error: {e}")
-            sheet_msg = f"Google Sheet: Failed - {e}"
-            errors.append("sheet")
-
-        # 2. Upload file to Google Drive
-        try:
-            drive_link = upload_file(file_path, file_name)
-            drive_msg = f"Google Drive: Uploaded - {drive_link}"
-        except Exception as e:
-            logger.error(f"Google Drive error: {e}")
-            drive_msg = f"Google Drive: Failed - {e}"
-            errors.append("drive")
-
-        # Clean up downloaded file
-        try:
-            os.remove(file_path)
-        except OSError:
-            pass
-
-        status = "Done!" if not errors else "Completed with some errors."
-        await query.message.reply_text(
-            f"{status}\n\n"
-            f"{sheet_msg}\n"
-            f"{drive_msg}\n\n"
-            "Send another invoice or use /start to begin again."
-        )
-
+        required_keys = ("invoice_data", "file_path", "file_name")
     else:
-        # Clean up downloaded file
-        try:
-            os.remove(context.user_data.get("file_path", ""))
-        except OSError:
-            pass
+        required_keys = ("file_path",)
 
-        await query.edit_message_text(
-            "Rejected. No data was saved.\n\n"
-            "Send another invoice or use /start to begin again."
+    if not all(key in context.user_data for key in required_keys):
+        expired_msg = (
+            "This approval session has expired or was reset.\n\n"
+            "Please send /start and submit the invoice again."
+        )
+        try:
+            await query.edit_message_text(expired_msg)
+        except Exception:
+            if query.message:
+                await query.message.reply_text(expired_msg)
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    try:
+        if query.data == "approve":
+            await query.edit_message_text("Approved! Saving to Google Sheet and uploading to Drive...")
+
+            invoice_data = context.user_data["invoice_data"]
+            file_path = context.user_data["file_path"]
+            file_name = context.user_data["file_name"]
+
+            errors = []
+
+            # 1. Upload file to Google Drive first (so we can include the link in Sheets)
+            drive_link = ""
+            try:
+                drive_link = await asyncio.to_thread(upload_file, file_path, file_name)
+                drive_msg = f"Google Drive: Uploaded - {drive_link}"
+            except Exception as e:
+                logger.error(f"Google Drive error: {e}")
+                drive_msg = f"Google Drive: Failed - {e}"
+                errors.append("drive")
+
+            # 2. Append to Google Sheet (with drive link)
+            invoice_data["drive_link"] = drive_link
+            try:
+                row_num = await asyncio.to_thread(append_invoice_row, invoice_data)
+                sheet_msg = f"Google Sheet: Row {row_num} added."
+            except Exception as e:
+                logger.error(f"Google Sheets error: {e}")
+                sheet_msg = f"Google Sheet: Failed - {e}"
+                errors.append("sheet")
+
+            # Clean up downloaded file
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
+
+            status = "Done!" if not errors else "Completed with some errors."
+            await query.message.reply_text(
+                f"{status}\n\n"
+                f"{sheet_msg}\n"
+                f"{drive_msg}\n\n"
+                "Send another invoice or use /start to begin again."
+            )
+
+        else:
+            # Clean up downloaded file
+            try:
+                os.remove(context.user_data.get("file_path", ""))
+            except OSError:
+                pass
+
+            await query.edit_message_text(
+                "Rejected. No data was saved.\n\n"
+                "Send another invoice or use /start to begin again."
+            )
+    except Exception as e:
+        logger.error(f"Error in handle_approval: {e}", exc_info=True)
+        await query.message.reply_text(
+            f"An error occurred: {e}\n\n"
+            "Please try again with /start."
         )
 
     context.user_data.clear()
@@ -260,4 +303,6 @@ def get_invoice_conversation_handler() -> ConversationHandler:
         fallbacks=[
             CommandHandler("cancel", cancel),
         ],
+        name="invoice_conversation",
+        persistent=True,
     )

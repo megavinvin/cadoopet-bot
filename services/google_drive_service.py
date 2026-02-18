@@ -46,7 +46,12 @@ def upload_file(file_path: str, file_name: str | None = None) -> str:
     media = MediaFileUpload(file_path, mimetype=mime_type)
     uploaded = (
         service.files()
-        .create(body=file_metadata, media_body=media, fields="id,webViewLink")
+        .create(
+            body=file_metadata,
+            media_body=media,
+            fields="id,webViewLink",
+            supportsAllDrives=True,
+        )
         .execute()
     )
 

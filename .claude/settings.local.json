@@ -6,7 +6,8 @@
       "Bash(uv run:*)",
       "Bash(git add:*)",
       "Bash(git commit -m \"$\\(cat <<''EOF''\nUnpin Pillow version and add CLAUDE.md\n\nRelax Pillow dependency from ==11.1.0 to >=11.1.0 to fix build\nfailure on Python 3.14 \\(no pre-built wheels for the pinned version\\).\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(python3:*)"
     ]
   }
 }
