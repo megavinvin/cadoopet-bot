@@ -39,7 +39,7 @@ def append_invoice_row(data: dict) -> int:
         data.get("amount", ""),
         data.get("paid_by", ""),
         data.get("claim_by", ""),
-        data.get("drive_link", ""),
+        f'=HYPERLINK("{data.get("drive_link", "")}", "Link")' if data.get("drive_link") else "",
     ]
 
     worksheet.append_row(row, value_input_option="USER_ENTERED")
